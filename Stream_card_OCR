@@ -1,0 +1,215 @@
+#   Import necessary libraries:
+# >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+import pandas as pd
+import streamlit as st
+import cv2
+#import easyocr
+from PIL import Image
+import os
+import regex as re
+import mysql.connector as pysql
+
+# >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+connection = pysql.connect(user = 'root',password = '3112', host = "localhost")
+cursor = connection.cursor()
+cursor.execute('CREATE DATABASE Stream_card')
+cursor.execute('USE Stream_card')
+cursor.execute('create table Table_1(Name varchar(50),Designation varchar(50) , Company_name varchar(50) , Address varchar(100) , Contact_number varchar(50), Email varchar(50),Website_link varchar(100), Image LONGBLOB)')
+
+#  Load the image file by using the image directory: 
+# >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+image_path = "C:\\Users\\rsiva\\OneDrive\\Desktop\\Bizacard_project\\1.png"
+image = Image.open(image_path)
+image_data = image.tobytes()
+
+with open(image_path,'rb') as file:
+    image_info = file.read()
+
+
+# >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+def upload_database(): 
+    reader = easyocr.Reader(['en'], gpu=False)
+    result = reader.readtext(image, paragraph=True, decoder='wordbeamsearch')
+
+
+
+    # Creating an empty list to append data:
+    # >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+    data = []
+    j =0
+    for i in result:
+        data.append(result[j][1])
+        j += 1
+        print(data)
+
+        org_reg = " ".join(data)
+        reg = " ".join(data)
+        print(data)
+    # >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+    # E-mail extraction:
+    # >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+        email_ex = re.compile(r'''([a-zA-z0-9]+
+        @ [a-zA-z0-9]+
+        \.[a-zA-Z]{2,10})''',re.VERBOSE)
+
+        email =  ''
+
+        for i in email_ex.findall(reg):
+            email += i
+            reg = reg.replace(i,'')
+
+    #===================================================================
+
+    # separating phone number:
+
+        phone_num_regex = re.compile(r'\+*\d{2,3}-\d{3,10}-\d{3,10}')
+
+        phone_num = ''
+
+        for numbers in phone_num_regex.findall(reg):
+            phone_num = phone_num + ' ' + numbers
+            reg = reg.replace(numbers,'')
+
+    #===================================================================
+
+    #  Separating Address:
+
+        address_regex = re.compile(r'\d{2,4}.+\d{6}')
+
+        address = ''
+
+        for addr in address_regex.findall(reg):
+            address +=  addr
+            reg = reg.replace(addr, '')
+
+    #===================================================================
+
+    # Separating website link:
+
+        link_regex = re.compile(r'www.?[\w.]+', re.IGNORECASE)
+
+        link = ''
+
+        for lin in link_regex.findall(reg):
+            link += lin
+            reg = reg.replace(lin, '')
+
+    #===================================================================
+
+    # Separating Designation:
+
+        desig_list = ['DATA MANAGER', 'CEO & FOUNDER',
+                          'General Manager', 'Marketing Executive', 'Technical Manager']
+        designation = ''
+
+        for i in desig_list:
+            if re.search(i, reg):
+                designation += i
+                reg = reg.replace(i, '')
+
+
+    #===================================================================
+
+    # Separating Company Name:
+
+        comp_name_list = ['selva digitals', 'GLOBAL INSURANCE',
+                              'BORCELLE AIRLINES', 'Family Restaurant', 'Sun Electricals']
+        company_name = ''
+
+        for i in comp_name_list:
+            if re.search(i, reg, flags=re.IGNORECASE):
+                company_name += i
+                reg = reg.replace(i, '')
+        name = reg.strip()
+
+def extracted_data(image):
+        reader  =  easyocr.Reader(['en'],gpu = False)
+        result = reader.readtext(image_path,paragraph = True,decoder = 'wordbeamsearch')
+        img = cv2.imread(image_path)
+        for detection in result:
+            top_left = tuple([int(val) for val in detection[0][0]])
+            bottom_right = tuple([int(val) for val in detection[0][2]])
+            text = detection[1]
+            font = cv2.FONT_HERSHEY_SIMPLEX
+            img = cv2.rectangle(img, top_left, bottom_right, (204, 0, 34), 5)
+            img = cv2.putText(img, text, top_left, font, 0.8,
+                              (0, 0, 255), 2, cv2.LINE_AA)
+            # plt.figure(figsize=(10, 10))
+            # plt.imshow(img)
+            # plt.show()
+            return img
+
+
+def show_database():
+    new_df = pd.read_sql("SELECT * FROM Table_1", con = connection)
+    return new_df
+
+st.set_page_config(page_title='Bizcardx Extraction', layout="wide")
+
+st.balloons()
+st.title(':violet[Business Card Data Extraction🖼️]')
+
+data_extraction, database_side = st.tabs(
+    ['Upload and View Data ', 'Database side'])
+
+
+
+st.balloons()
+st.title(':violet[Bizcardx Data Extraction🖼️]')
+
+data_extraction, database_side = st.tabs(
+    ['Data uploading and Viewing', 'Database side'])
+file_name = 'thiru'
+with data_extraction:
+    st.markdown(
+        "![Alt Text](https://cdn.dribbble.com/users/393235/screenshots/1643374/media/b32f920793005f554f22129c96627c56.gif)")
+    st.subheader(':violet[Choose image file to extract data]')
+    # ---------------------------------------------- Uploading file to streamlit app ------------------------------------------------------
+    uploaded = st.file_uploader('Choose a image file')
+    # --------------------------------------- Convert binary values of image to IMAGE ---------------------------------------------------
+    if uploaded is not None:
+        with open(f'{file_name}.png', 'wb') as f:
+            f.write(uploaded.getvalue())
+        # ----------------------------------------Extracting data from image (Image view)-------------------------------------------------
+        st.subheader(':violet[Image view of Data]')
+        if st.button('Extract Data from Image'):
+            extracted = extracted_data(f'{file_name}.png')
+            st.image(extracted)
+
+        # ----------------------------------------upload data to database----------------------------------------------------------------
+        st.subheader(':violet[Upload extracted to Database]')
+        if st.button('Upload data'):
+            upload_database(f'{file_name}.png')
+            st.success('Data uploaded to Database successfully!', icon="✅")
+# --------------------------------------------getting data from database and storing in df variable---------------------------------------
+df = show_database()
+with database_side:
+    st.markdown(
+        "![Alt Text](https://cdn.dribbble.com/users/2037413/screenshots/4144417/ar_businesscard.gif)")
+    # ----------------------------------------Showing all datas in database---------------------------------------------------------------
+    st.title(':violet[All Data in Database]')
+    if st.button('Show All'):
+        st.dataframe(df)
+    # -----------------------------------------Search data in the database----------------------------------------------------------------
+    st.subheader(':violet[Search Data by Column]')
+    column = str(st.radio('Select column to search', ('Name', 'Designation',
+                 'Company_name', 'Address', 'Contact_number', 'Mail_id', 'Website_link'), horizontal=True))
+    value = str(st.selectbox('Please select value to search', df[column]))
+    if st.button('Search Data'):
+        st.dataframe(df[df[column] == value])
+
+
+
+
+
+
+
+
+#streamlit run c:/Users/rsiva/End-to-End-Machine-Learning-project-with-ML-Flow/project.py [ARGUMENTS]
+
