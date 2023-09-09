@@ -1,1 +1,1 @@
-# Business_Card_Data_Extraction
+# Text_Extraction_from_BusinessCards
